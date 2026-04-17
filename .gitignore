@@ -32,7 +32,7 @@ env/
 
 # Helm cache / temp
 charts/
-*.lock
+Chart.lock
 
 # ----------------------
 # Kubernetes / local configs
