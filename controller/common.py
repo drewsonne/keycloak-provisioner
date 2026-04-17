@@ -72,7 +72,12 @@ def ensure_secret(
     data: dict[str, str],
     logger: kopf.Logger,
 ) -> None:
-    """Create or update a Kubernetes Secret with the supplied data."""
+    """Create or update a Kubernetes Secret with the supplied data.
+
+    Skips the patch if the secret already exists with identical values to
+    avoid churning the secret's resourceVersion, which would require pod
+    restarts to pick up the new env vars.
+    """
     v1 = kubernetes.client.CoreV1Api()
     secret_body = kubernetes.client.V1Secret(
         metadata=kubernetes.client.V1ObjectMeta(name=secret_name),
@@ -88,6 +93,16 @@ def ensure_secret(
         logger.info("Created secret %s", secret_name)
     except kubernetes.client.exceptions.ApiException as exc:
         if exc.status == 409:
+            # Check if the existing secret already has the correct values;
+            # skip the patch if so to avoid unnecessary resourceVersion churn.
+            existing = v1.read_namespaced_secret(name=secret_name, namespace=namespace)
+            existing_data = {
+                k: base64.b64decode(v).decode()
+                for k, v in (existing.data or {}).items()
+            }
+            if existing_data == data:
+                logger.debug("Secret %s already up-to-date, skipping patch", secret_name)
+                return
             v1.patch_namespaced_secret(
                 name=secret_name,
                 namespace=namespace,
