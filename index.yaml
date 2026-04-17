@@ -1,0 +1,14 @@
+apiVersion: v1
+entries:
+  keycloak-provisioner:
+  - apiVersion: v2
+    appVersion: 0.1.1
+    created: "2026-04-17T10:06:09.987792876Z"
+    description: Provision Keycloak OAuth clients via CRDs
+    digest: 1b313dc3456312c18eda571bb8e8818ae3289af35aae761c115fa6287e0a283e
+    name: keycloak-provisioner
+    type: application
+    urls:
+    - https://drewsonne.github.io/keycloak-provisioner/keycloak-provisioner-0.1.1.tgz
+    version: 0.1.1
+generated: "2026-04-17T10:06:09.986974057Z"
