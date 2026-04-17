@@ -1,0 +1,10 @@
+image:
+  repository: drewsonne/keycloak-provisioner
+  tag: latest
+
+keycloak:
+  url: http://keycloak-keycloakx-http.keycloak.svc.cluster.local
+  adminSecret:
+    name: keycloak-admin-credentials
+
+namespace: keycloak
