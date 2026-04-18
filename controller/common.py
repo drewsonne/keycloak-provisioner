@@ -101,7 +101,10 @@ def ensure_secret(
                 for k, v in (existing.data or {}).items()
             }
             if existing_data == data:
-                logger.debug("Secret %s already up-to-date, skipping patch", secret_name)
+                logger.debug(
+                    "Secret %s already up-to-date, skipping patch",
+                    secret_name,
+                )
                 return
             v1.patch_namespaced_secret(
                 name=secret_name,

@@ -16,7 +16,6 @@ from common import (
     resolve_connection_params,
 )
 
-
 # ---------------------------------------------------------------------------
 # Keycloak Admin API helpers
 # ---------------------------------------------------------------------------
@@ -166,13 +165,27 @@ def _upsert_client(
 
     try:
         _create_client(
-            keycloak_url, realm, client_id, redirect_uris, web_origins, client_secret, token
+            keycloak_url,
+            realm,
+            client_id,
+            redirect_uris,
+            web_origins,
+            client_secret,
+            token,
         )
         existing = _find_client(keycloak_url, realm, client_id, token)
-        assert existing is not None
+        if existing is None:
+            msg = f"Client {client_id} not found after creation"
+            raise kopf.TemporaryError(msg, delay=30)
         client_uuid = existing["id"]
         if protocol_mappers:
-            _add_protocol_mappers(keycloak_url, realm, client_uuid, protocol_mappers, token)
+            _add_protocol_mappers(
+                keycloak_url,
+                realm,
+                client_uuid,
+                protocol_mappers,
+                token,
+            )
         logger.info("Created Keycloak client %s", client_id)
     except httpx.HTTPError as exc:
         raise kopf.TemporaryError(f"Keycloak create failed: {exc}", delay=30) from exc
@@ -185,7 +198,14 @@ def _upsert_client(
 # ---------------------------------------------------------------------------
 
 
-@kopf.on.create(CRD_GROUP, CRD_VERSION, "keycloakclients", retries=5, backoff=30, timeout=300)
+@kopf.on.create(
+    CRD_GROUP,
+    CRD_VERSION,
+    "keycloakclients",
+    retries=5,
+    backoff=30,
+    timeout=300,
+)
 def create_fn(
     spec: kopf.Spec,
     name: str,
@@ -235,7 +255,14 @@ def resume_fn(
     return {"clientId": spec["clientId"], "clientUuid": client_uuid, "ready": True}
 
 
-@kopf.on.update(CRD_GROUP, CRD_VERSION, "keycloakclients", field="spec", retries=3, backoff=15)
+@kopf.on.update(
+    CRD_GROUP,
+    CRD_VERSION,
+    "keycloakclients",
+    field="spec",
+    retries=3,
+    backoff=15,
+)
 def update_fn(
     spec: kopf.Spec,
     name: str,
@@ -254,7 +281,14 @@ def update_fn(
         token = _get_admin_token(keycloak_url, username, password)
         existing = _find_client(keycloak_url, realm, client_id, token)
         if existing:
-            _update_client(keycloak_url, realm, existing["id"], redirect_uris, web_origins, token)
+            _update_client(
+                keycloak_url,
+                realm,
+                existing["id"],
+                redirect_uris,
+                web_origins,
+                token,
+            )
     except httpx.HTTPError as exc:
         raise kopf.TemporaryError(f"Keycloak update failed: {exc}", delay=30) from exc
 
@@ -273,7 +307,14 @@ def update_fn(
     return {"clientId": client_id, "clientUuid": client_uuid, "ready": True}
 
 
-@kopf.on.delete(CRD_GROUP, CRD_VERSION, "keycloakclients", retries=3, backoff=15, timeout=120)
+@kopf.on.delete(
+    CRD_GROUP,
+    CRD_VERSION,
+    "keycloakclients",
+    retries=3,
+    backoff=15,
+    timeout=120,
+)
 def delete_fn(
     spec: kopf.Spec,
     name: str,
@@ -323,7 +364,6 @@ def check_drift(
     except httpx.HTTPError as exc:
         raise kopf.TemporaryError(f"Drift check failed: {exc}", delay=60) from exc
 
-    client_uuid = existing["id"] if existing else None
     existing_secret = get_existing_client_secret(secret_ns, secret_name)
 
     if not existing or not existing_secret:
@@ -340,6 +380,11 @@ def check_drift(
             {"client_id": spec["clientId"], "client_secret": client_secret},
             logger,
         )
-        return {"clientId": spec["clientId"], "clientUuid": new_uuid, "ready": True, "drift": True}
+        return {
+            "clientId": spec["clientId"],
+            "clientUuid": new_uuid,
+            "ready": True,
+            "drift": True,
+        }
 
     return None
