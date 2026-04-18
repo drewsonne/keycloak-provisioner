@@ -323,13 +323,23 @@ def check_drift(
     except httpx.HTTPError as exc:
         raise kopf.TemporaryError(f"Drift check failed: {exc}", delay=60) from exc
 
-    if not existing:
-        logger.warning("Drift detected: Keycloak client %s missing", client_id)
-        return {"clientId": client_id, "ready": False, "drift": True}
-
+    client_uuid = existing["id"] if existing else None
     existing_secret = get_existing_client_secret(secret_ns, secret_name)
-    if not existing_secret:
-        logger.warning("Drift detected: Secret %s/%s missing", secret_ns, secret_name)
-        return {"clientId": client_id, "ready": False, "drift": True}
+
+    if not existing or not existing_secret:
+        logger.warning(
+            "Drift detected: client_exists=%s secret_exists=%s — remediating",
+            bool(existing),
+            bool(existing_secret),
+        )
+        new_uuid, client_secret = _upsert_client(spec, existing_secret, logger)
+        ensure_secret(
+            secret_ns,
+            secret_name,
+            body,
+            {"client_id": spec["clientId"], "client_secret": client_secret},
+            logger,
+        )
+        return {"clientId": spec["clientId"], "clientUuid": new_uuid, "ready": True, "drift": True}
 
     return None
