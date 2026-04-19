@@ -1,0 +1,102 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: keycloakrealms.keycloak.drewsonne.github.io
+spec:
+  group: keycloak.drewsonne.github.io
+  scope: Namespaced
+  names:
+    plural: keycloakrealms
+    singular: keycloakrealm
+    kind: KeycloakRealm
+    shortNames:
+      - kr
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Realm
+          type: string
+          jsonPath: .spec.realm
+        - name: Enabled
+          type: boolean
+          jsonPath: .spec.enabled
+        - name: Ready
+          type: boolean
+          jsonPath: .status.create_fn.ready
+        - name: Drift
+          type: boolean
+          jsonPath: .status.check_drift.drift
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: ["spec"]
+          properties:
+            spec:
+              type: object
+              required: ["realm"]
+              properties:
+                realm:
+                  type: string
+                  description: "The realm name/ID in Keycloak. Immutable after creation."
+                  maxLength: 255
+                displayName:
+                  type: string
+                  description: "Human-readable display name shown in the Keycloak UI."
+                  maxLength: 255
+                displayNameHtml:
+                  type: string
+                  description: "HTML display name shown on the login page."
+                enabled:
+                  type: boolean
+                  default: true
+                  description: "Whether the realm is active. Disabled realms reject all logins."
+                registrationAllowed:
+                  type: boolean
+                  default: false
+                  description: "Allow new users to self-register."
+                loginWithEmailAllowed:
+                  type: boolean
+                  default: true
+                  description: "Allow users to log in with their email address."
+                duplicateEmailsAllowed:
+                  type: boolean
+                  default: false
+                  description: "Allow multiple accounts with the same email address."
+                resetPasswordAllowed:
+                  type: boolean
+                  default: false
+                  description: "Show a forgot-password link on the login page."
+                editUsernameAllowed:
+                  type: boolean
+                  default: false
+                  description: "Allow users to change their own username."
+                bruteForceProtected:
+                  type: boolean
+                  default: false
+                  description: "Enable brute-force login protection."
+                sslRequired:
+                  type: string
+                  default: "external"
+                  enum: ["none", "external", "all"]
+                  description: "SSL enforcement level: none, external (default), or all."
+                keycloakAdminSecret:
+                  type: object
+                  description: "Override the default Keycloak admin credentials from env."
+                  required: ["name", "namespace"]
+                  properties:
+                    name:
+                      type: string
+                      maxLength: 253
+                    namespace:
+                      type: string
+                      maxLength: 63
+            status:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true

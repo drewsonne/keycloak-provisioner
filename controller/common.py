@@ -16,6 +16,24 @@ CRD_GROUP = "keycloak.drewsonne.github.io"
 CRD_VERSION = "v1"
 
 
+def get_admin_token(url: str, username: str, password: str) -> str:
+    """Obtain a short-lived admin access token from Keycloak."""
+    import httpx
+
+    resp = httpx.post(
+        f"{url}/realms/master/protocol/openid-connect/token",
+        data={
+            "username": username,
+            "password": password,
+            "grant_type": "password",
+            "client_id": "admin-cli",
+        },
+        timeout=10.0,
+    )
+    resp.raise_for_status()
+    return resp.json()["access_token"]
+
+
 def resolve_connection_params(
     spec: kopf.Spec,
 ) -> tuple[str, str, str]:

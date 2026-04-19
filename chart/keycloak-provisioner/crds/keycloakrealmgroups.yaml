@@ -1,0 +1,82 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: keycloakrealmgroups.keycloak.drewsonne.github.io
+spec:
+  group: keycloak.drewsonne.github.io
+  scope: Namespaced
+  names:
+    plural: keycloakrealmgroups
+    singular: keycloakrealmgroup
+    kind: KeycloakRealmGroup
+    shortNames:
+      - krg
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Name
+          type: string
+          jsonPath: .spec.name
+        - name: Realm
+          type: string
+          jsonPath: .spec.realm
+        - name: Ready
+          type: boolean
+          jsonPath: .status.create_fn.ready
+        - name: Drift
+          type: boolean
+          jsonPath: .status.check_drift.drift
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: ["spec"]
+          properties:
+            spec:
+              type: object
+              required: ["name", "realm"]
+              properties:
+                name:
+                  type: string
+                  description: "The group name in Keycloak."
+                  maxLength: 255
+                realm:
+                  type: string
+                  description: "The realm this group belongs to."
+                  maxLength: 255
+                attributes:
+                  type: object
+                  description: "Arbitrary key/value attributes to set on the group."
+                  additionalProperties:
+                    oneOf:
+                      - type: string
+                      - type: array
+                        items:
+                          type: string
+                realmRoles:
+                  type: array
+                  description: >
+                    Realm-level roles to assign to this group. All members of the group
+                    inherit these roles. The roles must already exist in the realm.
+                  items:
+                    type: string
+                keycloakAdminSecret:
+                  type: object
+                  description: "Override the default Keycloak admin credentials from env."
+                  required: ["name", "namespace"]
+                  properties:
+                    name:
+                      type: string
+                      maxLength: 253
+                    namespace:
+                      type: string
+                      maxLength: 63
+            status:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true

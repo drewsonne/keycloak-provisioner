@@ -9,7 +9,10 @@ import logging
 from typing import Any
 
 import clients  # noqa: F401 — registers KeycloakClient handlers
+import groups  # noqa: F401 — registers KeycloakRealmGroup handlers
 import kopf
+import realms  # noqa: F401 — registers KeycloakRealm handlers
+import users  # noqa: F401 — registers KeycloakUser handlers
 
 
 @kopf.on.startup()

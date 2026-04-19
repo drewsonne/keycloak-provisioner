@@ -11,7 +11,15 @@ metadata:
   name: keycloak-provisioner
 rules:
   - apiGroups: ["keycloak.drewsonne.github.io"]
-    resources: ["keycloakclients", "keycloakclients/status"]
+    resources:
+      - keycloakclients
+      - keycloakclients/status
+      - keycloakrealms
+      - keycloakrealms/status
+      - keycloakrealmgroups
+      - keycloakrealmgroups/status
+      - keycloakusers
+      - keycloakusers/status
     verbs: ["get", "list", "watch", "patch", "update"]
   - apiGroups: [""]
     resources: ["secrets"]

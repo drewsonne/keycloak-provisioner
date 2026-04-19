@@ -15,25 +15,9 @@ from common import (
     get_existing_client_secret,
     resolve_connection_params,
 )
-
-# ---------------------------------------------------------------------------
-# Keycloak Admin API helpers
-# ---------------------------------------------------------------------------
-
-
-def _get_admin_token(url: str, username: str, password: str) -> str:
-    resp = httpx.post(
-        f"{url}/realms/master/protocol/openid-connect/token",
-        data={
-            "username": username,
-            "password": password,
-            "grant_type": "password",
-            "client_id": "admin-cli",
-        },
-        timeout=10.0,
-    )
-    resp.raise_for_status()
-    return resp.json()["access_token"]
+from common import (
+    get_admin_token as _get_admin_token,
+)
 
 
 def _find_client(url: str, realm: str, client_id: str, token: str) -> dict | None:
