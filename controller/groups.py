@@ -6,7 +6,13 @@ from typing import Any
 
 import httpx
 import kopf
-from common import CRD_GROUP, CRD_VERSION, get_admin_token, resolve_connection_params
+from common import (
+    CRD_GROUP,
+    CRD_VERSION,
+    get_admin_token,
+    resolve_connection_params,
+    set_realm_owner_reference,
+)
 
 # ---------------------------------------------------------------------------
 # Keycloak Admin API helpers
@@ -208,14 +214,28 @@ def _upsert_group(spec: kopf.Spec, logger: kopf.Logger) -> str:
 @kopf.on.create(
     CRD_GROUP, CRD_VERSION, "keycloakrealmgroups", retries=5, backoff=30, timeout=300
 )
-def create_fn(spec: kopf.Spec, logger: kopf.Logger, **_: Any) -> dict[str, Any]:
+def create_fn(
+    spec: kopf.Spec,
+    body: kopf.Body,
+    namespace: str,
+    logger: kopf.Logger,
+    **_: Any,
+) -> dict[str, Any]:
     group_id = _upsert_group(spec, logger)
+    set_realm_owner_reference(body, namespace, spec["realm"], logger)
     return {"groupId": group_id, "name": spec["name"], "ready": True}
 
 
 @kopf.on.resume(CRD_GROUP, CRD_VERSION, "keycloakrealmgroups")
-def resume_fn(spec: kopf.Spec, logger: kopf.Logger, **_: Any) -> dict[str, Any]:
+def resume_fn(
+    spec: kopf.Spec,
+    body: kopf.Body,
+    namespace: str,
+    logger: kopf.Logger,
+    **_: Any,
+) -> dict[str, Any]:
     group_id = _upsert_group(spec, logger)
+    set_realm_owner_reference(body, namespace, spec["realm"], logger)
     return {"groupId": group_id, "name": spec["name"], "ready": True}
 
 
@@ -256,7 +276,12 @@ def delete_fn(spec: kopf.Spec, logger: kopf.Logger, **_: Any) -> None:
 
 
 @kopf.timer(
-    CRD_GROUP, CRD_VERSION, "keycloakrealmgroups", interval=300, initial_delay=60
+    CRD_GROUP,
+    CRD_VERSION,
+    "keycloakrealmgroups",
+    interval=300,
+    initial_delay=60,
+    idle=30,
 )
 def check_drift(
     spec: kopf.Spec, logger: kopf.Logger, **_: Any
@@ -282,6 +307,19 @@ def check_drift(
         if not _group_matches_spec(full, spec):
             needs_remediation = True
             reason = "config mismatch"
+        else:
+            desired_roles = set(spec.get("realmRoles", []))
+            if desired_roles:
+                roles_resp = httpx.get(
+                    f"{keycloak_url}/admin/realms/{realm}/groups/{existing['id']}/role-mappings/realm",
+                    headers={"Authorization": f"Bearer {token}"},
+                    timeout=10.0,
+                )
+                roles_resp.raise_for_status()
+                current_roles = {r["name"] for r in roles_resp.json()}
+                if desired_roles != current_roles:
+                    needs_remediation = True
+                    reason = "role mismatch"
 
     if needs_remediation:
         logger.warning(

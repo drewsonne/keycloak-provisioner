@@ -14,6 +14,7 @@ from common import (
     ensure_secret,
     get_existing_client_secret,
     resolve_connection_params,
+    set_realm_owner_reference,
 )
 from common import (
     get_admin_token as _get_admin_token,
@@ -211,6 +212,7 @@ def create_fn(
         {"client_id": spec["clientId"], "client_secret": client_secret},
         logger,
     )
+    set_realm_owner_reference(body, namespace, spec["realm"], logger)
     return {"clientId": spec["clientId"], "clientUuid": client_uuid, "ready": True}
 
 
@@ -236,6 +238,7 @@ def resume_fn(
         {"client_id": spec["clientId"], "client_secret": client_secret},
         logger,
     )
+    set_realm_owner_reference(body, namespace, spec["realm"], logger)
     return {"clientId": spec["clientId"], "clientUuid": client_uuid, "ready": True}
 
 
@@ -328,7 +331,14 @@ def delete_fn(
     delete_secret(secret_name, secret_ns, logger)
 
 
-@kopf.timer(CRD_GROUP, CRD_VERSION, "keycloakclients", interval=300, initial_delay=60)
+@kopf.timer(
+    CRD_GROUP,
+    CRD_VERSION,
+    "keycloakclients",
+    interval=300,
+    initial_delay=60,
+    idle=30,
+)
 def check_drift(
     spec: kopf.Spec,
     namespace: str,

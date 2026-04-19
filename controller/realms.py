@@ -224,7 +224,14 @@ def delete_fn(spec: kopf.Spec, logger: kopf.Logger, **_: Any) -> None:
         ) from exc
 
 
-@kopf.timer(CRD_GROUP, CRD_VERSION, "keycloakrealms", interval=300, initial_delay=60)
+@kopf.timer(
+    CRD_GROUP,
+    CRD_VERSION,
+    "keycloakrealms",
+    interval=300,
+    initial_delay=60,
+    idle=30,
+)
 def check_drift(
     spec: kopf.Spec, logger: kopf.Logger, **_: Any
 ) -> dict[str, Any] | None:

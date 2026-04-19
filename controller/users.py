@@ -6,7 +6,13 @@ from typing import Any
 
 import httpx
 import kopf
-from common import CRD_GROUP, CRD_VERSION, get_admin_token, resolve_connection_params
+from common import (
+    CRD_GROUP,
+    CRD_VERSION,
+    get_admin_token,
+    resolve_connection_params,
+    set_realm_owner_reference,
+)
 from groups import _find_group
 
 # ---------------------------------------------------------------------------
@@ -112,9 +118,10 @@ def _sync_group_memberships(
     for name in desired_group_names:
         group = _find_group(url, realm, name, token)
         if group is None:
-            raise kopf.PermanentError(
-                f"Group {name!r} not found in realm {realm!r}. "
-                "Create the KeycloakRealmGroup resource first."
+            raise kopf.TemporaryError(
+                f"Group {name!r} not found in realm {realm!r}."
+                " Waiting for KeycloakRealmGroup to be ready.",
+                delay=30,
             )
         desired_ids[group["id"]] = name
 
@@ -286,14 +293,28 @@ def _upsert_user(spec: kopf.Spec, logger: kopf.Logger) -> str:
 @kopf.on.create(
     CRD_GROUP, CRD_VERSION, "keycloakusers", retries=5, backoff=30, timeout=300
 )
-def create_fn(spec: kopf.Spec, logger: kopf.Logger, **_: Any) -> dict[str, Any]:
+def create_fn(
+    spec: kopf.Spec,
+    body: kopf.Body,
+    namespace: str,
+    logger: kopf.Logger,
+    **_: Any,
+) -> dict[str, Any]:
     user_id = _upsert_user(spec, logger)
+    set_realm_owner_reference(body, namespace, spec["realm"], logger)
     return {"userId": user_id, "username": spec["username"], "ready": True}
 
 
 @kopf.on.resume(CRD_GROUP, CRD_VERSION, "keycloakusers")
-def resume_fn(spec: kopf.Spec, logger: kopf.Logger, **_: Any) -> dict[str, Any]:
+def resume_fn(
+    spec: kopf.Spec,
+    body: kopf.Body,
+    namespace: str,
+    logger: kopf.Logger,
+    **_: Any,
+) -> dict[str, Any]:
     user_id = _upsert_user(spec, logger)
+    set_realm_owner_reference(body, namespace, spec["realm"], logger)
     return {"userId": user_id, "username": spec["username"], "ready": True}
 
 
@@ -333,7 +354,14 @@ def delete_fn(spec: kopf.Spec, logger: kopf.Logger, **_: Any) -> None:
         raise kopf.TemporaryError(f"User delete failed: {exc}", delay=30) from exc
 
 
-@kopf.timer(CRD_GROUP, CRD_VERSION, "keycloakusers", interval=300, initial_delay=60)
+@kopf.timer(
+    CRD_GROUP,
+    CRD_VERSION,
+    "keycloakusers",
+    interval=300,
+    initial_delay=60,
+    idle=30,
+)
 def check_drift(
     spec: kopf.Spec, logger: kopf.Logger, **_: Any
 ) -> dict[str, Any] | None:
