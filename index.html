@@ -21,24 +21,46 @@
 </head>
 <body>
 <h1>keycloak-provisioner</h1>
-<p>A lightweight Kubernetes operator that provisions Keycloak OAuth clients using a Custom Resource Definition (CRD).</p>
-<p>It allows applications to declaratively request their own Keycloak client and credentials without manual Keycloak admin access or pre-deploy scripts.</p>
+<p>A lightweight Kubernetes operator that provisions Keycloak realms, groups, users, and OAuth clients declaratively via CRDs.</p>
+<p>Applications can request their own Keycloak configuration without manual Keycloak admin access or pre-deploy scripts.</p>
 <hr>
 <h2>What it does</h2>
-<p>When you create a <code>KeycloakClient</code> resource, the operator will:</p>
-<ul>
-  <li>Create a Keycloak OAuth client in the specified realm</li>
-  <li>Add any configured protocol mappers (e.g. realm-roles mapper)</li>
-  <li>Store the <code>client_id</code> and <code>client_secret</code> in a Kubernetes Secret</li>
-</ul>
+<p>The operator manages four CRD kinds:</p>
+<table>
+  <thead><tr>
+    <th>Kind</th>
+    <th>What it provisions</th>
+  </tr>
+  </thead><tbody>
+  <tr>
+    <td><code>KeycloakRealm</code></td>
+    <td>A Keycloak realm</td>
+  </tr>
+  <tr>
+    <td><code>KeycloakRealmGroup</code></td>
+    <td>A group within a realm, with optional realm-role assignments</td>
+  </tr>
+  <tr>
+    <td><code>KeycloakUser</code></td>
+    <td>A user within a realm, with optional group membership and role assignments</td>
+  </tr>
+  <tr>
+    <td><code>KeycloakClient</code></td>
+    <td>An OAuth client within a realm, with a generated secret stored in a K8s Secret</td>
+  </tr>
+  </tbody>
+</table>
+<p>All resources are reconciled continuously — the operator detects and repairs out-of-band drift every 5 minutes.</p>
 <hr>
 <h2>Architecture</h2>
-<ul>
-  <li>Keycloak (any version with Admin REST API)</li>
-  <li>This operator (runs in Kubernetes)</li>
-  <li>CRD (<code>KeycloakClient</code>)</li>
-  <li>Kubernetes Secrets for OAuth credentials</li>
-</ul>
+<pre><code>
+KeycloakRealm
+  └── KeycloakRealmGroup   (ownerRef → Realm; cascade-deleted with realm)
+  └── KeycloakUser         (ownerRef → Realm; cascade-deleted with realm)
+  └── KeycloakClient       (ownerRef → Realm; cascade-deleted with realm)
+        └── K8s Secret     (ownerRef → Client; GC&#x27;d with client)
+</code></pre>
+<p>Deleting a <code>KeycloakRealm</code> CR triggers K8s garbage collection of all child CRs, which in turn clean up their Keycloak resources before the realm itself is deleted.</p>
 <hr>
 <h2>Installation</h2>
 <p>Add the Helm repository:</p>
@@ -86,7 +108,82 @@ namespace: keycloak
 </code></pre>
 <hr>
 <h2>Usage</h2>
-<p>Create a Keycloak OAuth client:</p>
+<h3>KeycloakRealm</h3>
+<p>Creates a Keycloak realm with configurable login, security, and SSL settings.</p>
+<pre><code class="language-yaml">
+apiVersion: keycloak.drewsonne.github.io/v1
+kind: KeycloakRealm
+metadata:
+  name: my-realm
+  namespace: keycloak
+spec:
+  realm: my-realm
+  displayName: My Realm
+  enabled: true
+  loginWithEmailAllowed: true
+  bruteForceProtected: true
+  sslRequired: external        # none | external | all
+</code></pre>
+<p><code>sslRequired</code> values:</p>
+<table>
+  <thead><tr>
+    <th>Value</th>
+    <th>Behaviour</th>
+  </tr>
+  </thead><tbody>
+  <tr>
+    <td><code>none</code></td>
+    <td>SSL is not required for any client IP address</td>
+  </tr>
+  <tr>
+    <td><code>external</code></td>
+    <td>Non-private IP addresses must use SSL</td>
+  </tr>
+  <tr>
+    <td><code>all</code></td>
+    <td>All IP addresses must use SSL</td>
+  </tr>
+  </tbody>
+</table>
+<h3>KeycloakRealmGroup</h3>
+<p>Creates a group within a realm, with optional realm-role assignments and custom attributes.</p>
+<pre><code class="language-yaml">
+apiVersion: keycloak.drewsonne.github.io/v1
+kind: KeycloakRealmGroup
+metadata:
+  name: my-realm-admins
+  namespace: keycloak
+spec:
+  realm: my-realm
+  name: admins
+  realmRoles:
+    - admin
+  attributes:
+    team: [&quot;platform&quot;]
+</code></pre>
+<h3>KeycloakUser</h3>
+<p>Creates a user within a realm, with optional group membership and realm-role assignments.</p>
+<pre><code class="language-yaml">
+apiVersion: keycloak.drewsonne.github.io/v1
+kind: KeycloakUser
+metadata:
+  name: alice
+  namespace: keycloak
+spec:
+  realm: my-realm
+  username: alice
+  email: alice@example.com
+  firstName: Alice
+  lastName: Smith
+  enabled: true
+  emailVerified: true
+  groups:
+    - admins
+  realmRoles:
+    - offline_access
+</code></pre>
+<h3>KeycloakClient</h3>
+<p>Creates an OAuth client within a realm, with a generated secret stored in a K8s Secret. Supports protocol mappers for token claim customisation.</p>
 <pre><code class="language-yaml">
 apiVersion: keycloak.drewsonne.github.io/v1
 kind: KeycloakClient
@@ -101,6 +198,7 @@ spec:
   webOrigins:
     - https://my-app.example.com
   secretName: keycloak-my-app-secret
+  secretNamespace: my-app        # optional; defaults to CR namespace
   protocolMappers:
     - name: realm-roles
       mapperType: oidc-usermodel-realm-role-mapper
@@ -111,29 +209,45 @@ spec:
         access.token.claim: &quot;true&quot;
         claim.name: &quot;realm_access.roles&quot;
         jsonType.label: &quot;String&quot;
+</code></pre>
+<hr>
+<h2>Per-CR credential override</h2>
+<p>Every CR accepts an optional <code>keycloakAdminSecret</code> field to use a different Keycloak admin account (useful for multi-tenant setups):</p>
+<pre><code class="language-yaml">
+spec:
   keycloakAdminSecret:
-    name: keycloak-admin-credentials
+    name: my-other-admin-secret
     namespace: keycloak
 </code></pre>
 <hr>
 <h2>Output</h2>
-<p>The operator creates a Secret with:</p>
-<pre><code class="language-bash">
-kubectl get secret keycloak-my-app-secret -n my-app -o yaml
-</code></pre>
-<p>Contents:</p>
+<p><code>KeycloakClient</code> creates a Secret containing:</p>
 <ul>
   <li><code>client_id</code> — the Keycloak client ID</li>
   <li><code>client_secret</code> — the OAuth client secret</li>
 </ul>
+<pre><code class="language-bash">
+kubectl get secret keycloak-my-app-secret -n my-app -o yaml
+</code></pre>
 <hr>
 <h2>Behaviour notes</h2>
 <ul>
-  <li>Idempotent: safe to reapply the same resource</li>
-  <li>If a client already exists in Keycloak, its secret is retrieved (not regenerated)</li>
-  <li>If the K8s Secret already exists, the existing <code>client_secret</code> is preserved</li>
-  <li>Protocol mappers are added on creation only (not reconciled on update)</li>
+  <li><strong>Idempotent</strong> — safe to reapply; existing Keycloak resources are updated, not recreated</li>
+  <li><strong>Secret preservation</strong> — if a <code>KeycloakClient</code> Secret already exists, the <code>client_secret</code> is preserved rather than regenerated</li>
+  <li><strong>Protocol mappers</strong> — added on client creation only; not reconciled on update</li>
+  <li><strong>Drift detection</strong> — a timer runs every 5 minutes per resource to detect and repair out-of-band changes (e.g. manual edits in the Keycloak UI); drift is visible in <code>kubectl describe</code> as a K8s Warning event and in the <code>Drift</code> printer column</li>
+  <li><strong>Cascade deletion</strong> — deleting a <code>KeycloakRealm</code> CR triggers cleanup of all child CRs (groups, users, clients) before the realm is removed from Keycloak</li>
+  <li><strong>User/group ordering</strong> — if a <code>KeycloakUser</code> references a group that doesn&#x27;t exist yet, the controller retries automatically until the group is ready</li>
 </ul>
+<hr>
+<h2>Observability</h2>
+<pre><code class="language-bash">
+kubectl get keycloakrealms
+kubectl get keycloakclients
+kubectl get keycloakrealmgroups
+kubectl get keycloakusers
+</code></pre>
+<p>Printer columns include <code>Ready</code>, <code>Drift</code>, and <code>Age</code>. Drift events are also emitted as Kubernetes Warning events visible via <code>kubectl describe</code>.</p>
 <hr>
 <h2>Development</h2>
 <p>Build locally:</p>
@@ -157,13 +271,14 @@ docker run --rm \
 <table>
   <thead><tr><th>Version</th><th>App Version</th><th>Created</th><th>Download</th></tr></thead>
   <tbody>
-  <tr><td>0.1.8</td><td>0.1.8</td><td>2026-04-19T16:51:39</td><td><a href="keycloak-provisioner-0.1.8.tgz">keycloak-provisioner-0.1.8.tgz</a></td></tr>
-  <tr><td>0.1.7</td><td>0.1.7</td><td>2026-04-19T16:51:39</td><td><a href="keycloak-provisioner-0.1.7.tgz">keycloak-provisioner-0.1.7.tgz</a></td></tr>
-  <tr><td>0.1.6</td><td>0.1.6</td><td>2026-04-19T16:51:39</td><td><a href="keycloak-provisioner-0.1.6.tgz">keycloak-provisioner-0.1.6.tgz</a></td></tr>
-  <tr><td>0.1.5</td><td>0.1.5</td><td>2026-04-19T16:51:39</td><td><a href="keycloak-provisioner-0.1.5.tgz">keycloak-provisioner-0.1.5.tgz</a></td></tr>
-  <tr><td>0.1.4</td><td>0.1.4</td><td>2026-04-19T16:51:39</td><td><a href="keycloak-provisioner-0.1.4.tgz">keycloak-provisioner-0.1.4.tgz</a></td></tr>
-  <tr><td>0.1.3</td><td>0.1.3</td><td>2026-04-19T16:51:39</td><td><a href="keycloak-provisioner-0.1.3.tgz">keycloak-provisioner-0.1.3.tgz</a></td></tr>
-  <tr><td>0.1.1</td><td>0.1.1</td><td>2026-04-19T16:51:39</td><td><a href="keycloak-provisioner-0.1.1.tgz">keycloak-provisioner-0.1.1.tgz</a></td></tr>
+  <tr><td>0.1.9</td><td>0.1.9</td><td>2026-04-19T16:58:55</td><td><a href="keycloak-provisioner-0.1.9.tgz">keycloak-provisioner-0.1.9.tgz</a></td></tr>
+  <tr><td>0.1.8</td><td>0.1.8</td><td>2026-04-19T16:58:55</td><td><a href="keycloak-provisioner-0.1.8.tgz">keycloak-provisioner-0.1.8.tgz</a></td></tr>
+  <tr><td>0.1.7</td><td>0.1.7</td><td>2026-04-19T16:58:55</td><td><a href="keycloak-provisioner-0.1.7.tgz">keycloak-provisioner-0.1.7.tgz</a></td></tr>
+  <tr><td>0.1.6</td><td>0.1.6</td><td>2026-04-19T16:58:55</td><td><a href="keycloak-provisioner-0.1.6.tgz">keycloak-provisioner-0.1.6.tgz</a></td></tr>
+  <tr><td>0.1.5</td><td>0.1.5</td><td>2026-04-19T16:58:55</td><td><a href="keycloak-provisioner-0.1.5.tgz">keycloak-provisioner-0.1.5.tgz</a></td></tr>
+  <tr><td>0.1.4</td><td>0.1.4</td><td>2026-04-19T16:58:55</td><td><a href="keycloak-provisioner-0.1.4.tgz">keycloak-provisioner-0.1.4.tgz</a></td></tr>
+  <tr><td>0.1.3</td><td>0.1.3</td><td>2026-04-19T16:58:55</td><td><a href="keycloak-provisioner-0.1.3.tgz">keycloak-provisioner-0.1.3.tgz</a></td></tr>
+  <tr><td>0.1.1</td><td>0.1.1</td><td>2026-04-19T16:58:55</td><td><a href="keycloak-provisioner-0.1.1.tgz">keycloak-provisioner-0.1.1.tgz</a></td></tr>
   </tbody>
 </table>
 <hr>
