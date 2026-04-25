@@ -219,7 +219,11 @@ def resolve_connection_params(
                 delay=30,
             ) from exc
         data = secret.data or {}
-        username = base64.b64decode(data["username"]).decode()
+        username = (
+            base64.b64decode(data["username"]).decode()
+            if "username" in data
+            else KEYCLOAK_ADMIN_USERNAME
+        )
         password = base64.b64decode(data["password"]).decode()
         return KEYCLOAK_URL, username, password
     return KEYCLOAK_URL, KEYCLOAK_ADMIN_USERNAME, KEYCLOAK_ADMIN_PASSWORD
