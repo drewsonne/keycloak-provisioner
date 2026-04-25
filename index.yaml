@@ -2,8 +2,18 @@ apiVersion: v1
 entries:
   keycloak-provisioner:
   - apiVersion: v2
+    appVersion: 0.1.10
+    created: "2026-04-25T15:39:53.209926273Z"
+    description: Provision Keycloak OAuth clients via CRDs
+    digest: 99f7ac203480f18a4c224e78f84c0854da135be733580b979fa38b71aa6bd7ec
+    name: keycloak-provisioner
+    type: application
+    urls:
+    - https://drewsonne.github.io/keycloak-provisioner/keycloak-provisioner-0.1.10.tgz
+    version: 0.1.10
+  - apiVersion: v2
     appVersion: 0.1.9
-    created: "2026-04-19T16:58:55.956794024Z"
+    created: "2026-04-25T15:39:53.211283409Z"
     description: Provision Keycloak OAuth clients via CRDs
     digest: d317fca1f86d017dc23ae3c8717bc6142ad330ef11397554cbccfd3fb6123b1a
     name: keycloak-provisioner
@@ -13,7 +23,7 @@ entries:
     version: 0.1.9
   - apiVersion: v2
     appVersion: 0.1.8
-    created: "2026-04-19T16:58:55.956384641Z"
+    created: "2026-04-25T15:39:53.211102311Z"
     description: Provision Keycloak OAuth clients via CRDs
     digest: 2154b7788b266731927c2de7675caa43d1d10f83e83c1006fc0db27b5dbe4267
     name: keycloak-provisioner
@@ -23,7 +33,7 @@ entries:
     version: 0.1.8
   - apiVersion: v2
     appVersion: 0.1.7
-    created: "2026-04-19T16:58:55.955801331Z"
+    created: "2026-04-25T15:39:53.210904931Z"
     description: Provision Keycloak OAuth clients via CRDs
     digest: 1ee9c66fe02017490a83f2392c20bf6ea196b98d86ddd0ad34e260778615c732
     name: keycloak-provisioner
@@ -33,7 +43,7 @@ entries:
     version: 0.1.7
   - apiVersion: v2
     appVersion: 0.1.6
-    created: "2026-04-19T16:58:55.955586089Z"
+    created: "2026-04-25T15:39:53.210714015Z"
     description: Provision Keycloak OAuth clients via CRDs
     digest: 540ae3e70065ad4c58832cf5f0a8ad24d9521f5ab05335dffd95d7f89c7b7cbe
     name: keycloak-provisioner
@@ -43,7 +53,7 @@ entries:
     version: 0.1.6
   - apiVersion: v2
     appVersion: 0.1.5
-    created: "2026-04-19T16:58:55.955250131Z"
+    created: "2026-04-25T15:39:53.210503451Z"
     description: Provision Keycloak OAuth clients via CRDs
     digest: bbdb4924b154f64f3e4178fa6ec44aa8c0ebe57e1ef8819895db1da6b7f037bd
     name: keycloak-provisioner
@@ -53,7 +63,7 @@ entries:
     version: 0.1.5
   - apiVersion: v2
     appVersion: 0.1.4
-    created: "2026-04-19T16:58:55.955075194Z"
+    created: "2026-04-25T15:39:53.21029957Z"
     description: Provision Keycloak OAuth clients via CRDs
     digest: e68ef316a455816ea5fc4414e23dc03207918bc2d92f4d478158decf8ffd87af
     name: keycloak-provisioner
@@ -63,7 +73,7 @@ entries:
     version: 0.1.4
   - apiVersion: v2
     appVersion: 0.1.3
-    created: "2026-04-19T16:58:55.954905347Z"
+    created: "2026-04-25T15:39:53.210107992Z"
     description: Provision Keycloak OAuth clients via CRDs
     digest: 24b1ea5fe52c1925e87d9bc8da0db3c84e21d43e0d0326929b18adc433cec780
     name: keycloak-provisioner
@@ -73,7 +83,7 @@ entries:
     version: 0.1.3
   - apiVersion: v2
     appVersion: 0.1.1
-    created: "2026-04-19T16:58:55.954679365Z"
+    created: "2026-04-25T15:39:53.209709708Z"
     description: Provision Keycloak OAuth clients via CRDs
     digest: 31b29c4ba31571430ec09e3d68dcca8178f680e7f2d41ca10b216194036ce46d
     name: keycloak-provisioner
@@ -81,4 +91,4 @@ entries:
     urls:
     - https://drewsonne.github.io/keycloak-provisioner/keycloak-provisioner-0.1.1.tgz
     version: 0.1.1
-generated: "2026-04-19T16:58:55.954402728Z"
+generated: "2026-04-25T15:39:53.209380503Z"
