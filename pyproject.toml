@@ -12,6 +12,8 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pre-commit>=4",
+    "pytest>=8",
+    "pytest-httpx>=0.35",
     "ruff>=0.11",
     "ty>=0.0.1a7",
 ]
@@ -32,6 +34,15 @@ fixable = ["ALL"]
 unfixable = []
 
 [tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "ANN",      # no annotations required in tests
+    "D",        # no docstrings required in tests
+    "INP001",   # tests/ is not a package
+    "S101",     # assert is fine in pytest
+    "PLR2004",  # magic values fine in test assertions
+    "SLF001",   # accessing private helpers is fine in tests
+]
+
 "controller/**/*.py" = [
     "ANN401",   # kopf passes Any for body/spec/status
     "ARG001",   # kopf handlers have required unused params
@@ -44,6 +55,9 @@ unfixable = []
     "PLR2004",  # magic values in status code checks
     "TRY003",   # long messages in TemporaryError are fine for kopf
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 [tool.ty.rules]
 # kopf decorators use introspection; their type stubs don't match handler signatures
