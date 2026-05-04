@@ -82,7 +82,7 @@ def set_condition(
     """
     now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     existing: list[dict[str, Any]] = list(
-        (body.get("status") or {}).get("conditions", [])
+        (body.get("status") or {}).get("conditions", []),
     )
     prev = next((c for c in existing if c["type"] == condition_type), None)
     last_transition = (
@@ -156,7 +156,8 @@ def set_realm_owner_reference(
 
     owner_uid = realm_obj["metadata"]["uid"]
     existing_owners: list[dict[str, Any]] = body.get("metadata", {}).get(
-        "ownerReferences", []
+        "ownerReferences",
+        [],
     )
     if any(o.get("uid") == owner_uid for o in existing_owners):
         return  # already set
