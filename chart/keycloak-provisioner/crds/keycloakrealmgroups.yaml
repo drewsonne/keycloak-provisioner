@@ -54,11 +54,7 @@ spec:
                   type: object
                   description: "Arbitrary key/value attributes to set on the group."
                   additionalProperties:
-                    oneOf:
-                      - type: string
-                      - type: array
-                        items:
-                          type: string
+                    x-kubernetes-preserve-unknown-fields: true
                 realmRoles:
                   type: array
                   description: >
