@@ -13,6 +13,7 @@ from common import (
     delete_secret,
     ensure_secret,
     get_existing_client_secret,
+    http,
     resolve_connection_params,
     set_realm_owner_reference,
 )
@@ -23,11 +24,10 @@ from common import (
 
 def _find_client(url: str, realm: str, client_id: str, token: str) -> dict | None:
     """Return the Keycloak client object or None if not found."""
-    resp = httpx.get(
+    resp = http.get(
         f"{url}/admin/realms/{realm}/clients",
         params={"clientId": client_id},
         headers={"Authorization": f"Bearer {token}"},
-        timeout=10.0,
     )
     resp.raise_for_status()
     clients = resp.json()
@@ -35,10 +35,9 @@ def _find_client(url: str, realm: str, client_id: str, token: str) -> dict | Non
 
 
 def _get_client_secret(url: str, realm: str, client_uuid: str, token: str) -> str:
-    resp = httpx.get(
+    resp = http.get(
         f"{url}/admin/realms/{realm}/clients/{client_uuid}/client-secret",
         headers={"Authorization": f"Bearer {token}"},
-        timeout=10.0,
     )
     resp.raise_for_status()
     return resp.json()["value"]
@@ -53,7 +52,7 @@ def _create_client(
     client_secret: str,
     token: str,
 ) -> None:
-    resp = httpx.post(
+    resp = http.post(
         f"{url}/admin/realms/{realm}/clients",
         headers={"Authorization": f"Bearer {token}"},
         json={
@@ -68,7 +67,6 @@ def _create_client(
             "protocol": "openid-connect",
             "publicClient": False,
         },
-        timeout=10.0,
     )
     resp.raise_for_status()
 
@@ -81,14 +79,13 @@ def _update_client(
     web_origins: list[str],
     token: str,
 ) -> None:
-    resp = httpx.put(
+    resp = http.put(
         f"{url}/admin/realms/{realm}/clients/{client_uuid}",
         headers={"Authorization": f"Bearer {token}"},
         json={
             "redirectUris": redirect_uris,
             "webOrigins": web_origins,
         },
-        timeout=10.0,
     )
     resp.raise_for_status()
 
@@ -101,7 +98,7 @@ def _add_protocol_mappers(
     token: str,
 ) -> None:
     for mapper in mappers:
-        resp = httpx.post(
+        resp = http.post(
             f"{url}/admin/realms/{realm}/clients/{client_uuid}/protocol-mappers/models",
             headers={"Authorization": f"Bearer {token}"},
             json={
@@ -111,7 +108,6 @@ def _add_protocol_mappers(
                 "consentRequired": False,
                 "config": dict(mapper.get("config", {})),
             },
-            timeout=10.0,
         )
         resp.raise_for_status()
 
@@ -319,10 +315,9 @@ def delete_fn(
         token = _get_admin_token(keycloak_url, username, password)
         existing = _find_client(keycloak_url, realm, client_id, token)
         if existing:
-            httpx.delete(
+            http.delete(
                 f"{keycloak_url}/admin/realms/{realm}/clients/{existing['id']}",
                 headers={"Authorization": f"Bearer {token}"},
-                timeout=10.0,
             ).raise_for_status()
             logger.info("Deleted Keycloak client %s", client_id)
     except httpx.HTTPError as exc:

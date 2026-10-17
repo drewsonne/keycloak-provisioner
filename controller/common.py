@@ -9,6 +9,7 @@ import time
 from datetime import UTC, datetime
 from typing import Any
 
+import httpx
 import kopf
 import kubernetes
 
@@ -18,6 +19,12 @@ KEYCLOAK_ADMIN_PASSWORD = os.environ["KEYCLOAK_ADMIN_PASSWORD"]
 
 CRD_GROUP = "keycloak.drewsonne.github.io"
 CRD_VERSION = "v1"
+
+# Every outbound call needs a timeout; a hung call would otherwise pin a worker.
+REQUEST_TIMEOUT = 10.0
+
+# One shared client (thread-safe): reuses connections and the SSL context.
+http = httpx.Client(timeout=REQUEST_TIMEOUT)
 
 # ---------------------------------------------------------------------------
 # Token cache
@@ -29,8 +36,6 @@ _token_cache_lock = threading.Lock()
 
 def get_admin_token(url: str, username: str, password: str) -> str:
     """Return a cached admin access token, refreshing when within 10 s of expiry."""
-    import httpx
-
     cache_key = (url, username)
     now = time.monotonic()
     with _token_cache_lock:
@@ -40,7 +45,7 @@ def get_admin_token(url: str, username: str, password: str) -> str:
             if now < expires_at:
                 return token
 
-    resp = httpx.post(
+    resp = http.post(
         f"{url}/realms/master/protocol/openid-connect/token",
         data={
             "username": username,
@@ -48,7 +53,6 @@ def get_admin_token(url: str, username: str, password: str) -> str:
             "grant_type": "password",
             "client_id": "admin-cli",
         },
-        timeout=10.0,
     )
     resp.raise_for_status()
     payload = resp.json()
@@ -133,6 +137,7 @@ def set_realm_owner_reference(
             version=CRD_VERSION,
             namespace=namespace,
             plural="keycloakrealms",
+            _request_timeout=REQUEST_TIMEOUT,
         )
     except kubernetes.client.exceptions.ApiException as exc:
         logger.warning("Could not list KeycloakRealm objects: %s", exc)
@@ -181,6 +186,7 @@ def set_realm_owner_reference(
             plural=cr_plural,
             name=cr_name,
             body={"metadata": {"ownerReferences": [owner_ref]}},
+            _request_timeout=REQUEST_TIMEOUT,
         )
         logger.info(
             "Set ownerReference: %s/%s → KeycloakRealm/%s",
@@ -212,6 +218,7 @@ def resolve_connection_params(
             secret = v1.read_namespaced_secret(
                 name=override_secret["name"],
                 namespace=override_secret["namespace"],
+                _request_timeout=REQUEST_TIMEOUT,
             )
         except kubernetes.client.exceptions.ApiException as exc:
             raise kopf.TemporaryError(
@@ -242,7 +249,9 @@ def get_existing_client_secret(
     """Read the client_secret from an existing Kubernetes Secret, or return None."""
     v1 = kubernetes.client.CoreV1Api()
     try:
-        secret = v1.read_namespaced_secret(name=secret_name, namespace=namespace)
+        secret = v1.read_namespaced_secret(
+            name=secret_name, namespace=namespace, _request_timeout=REQUEST_TIMEOUT
+        )
         raw = (secret.data or {}).get("client_secret")
         if raw:
             return base64.b64decode(raw).decode()
@@ -279,11 +288,15 @@ def ensure_secret(
         kopf.adopt(secret_body)
 
     try:
-        v1.create_namespaced_secret(namespace=namespace, body=secret_body)
+        v1.create_namespaced_secret(
+            namespace=namespace, body=secret_body, _request_timeout=REQUEST_TIMEOUT
+        )
         logger.info("Created secret %s", secret_name)
     except kubernetes.client.exceptions.ApiException as exc:
         if exc.status == 409:
-            existing = v1.read_namespaced_secret(name=secret_name, namespace=namespace)
+            existing = v1.read_namespaced_secret(
+                name=secret_name, namespace=namespace, _request_timeout=REQUEST_TIMEOUT
+            )
             existing_data = {
                 k: base64.b64decode(v).decode()
                 for k, v in (existing.data or {}).items()
@@ -298,6 +311,7 @@ def ensure_secret(
                 name=secret_name,
                 namespace=namespace,
                 body={"stringData": data},
+                _request_timeout=REQUEST_TIMEOUT,
             )
             logger.info("Updated existing secret %s", secret_name)
         else:
@@ -315,7 +329,9 @@ def delete_secret(
     """Delete a Kubernetes Secret, ignoring 404."""
     v1 = kubernetes.client.CoreV1Api()
     try:
-        v1.delete_namespaced_secret(name=secret_name, namespace=secret_ns)
+        v1.delete_namespaced_secret(
+            name=secret_name, namespace=secret_ns, _request_timeout=REQUEST_TIMEOUT
+        )
         logger.info("Deleted secret %s", secret_name)
     except kubernetes.client.exceptions.ApiException as exc:
         if exc.status != 404:

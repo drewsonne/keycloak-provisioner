@@ -10,6 +10,7 @@ from common import (
     CRD_GROUP,
     CRD_VERSION,
     get_admin_token,
+    http,
     resolve_connection_params,
     set_realm_owner_reference,
 )
@@ -22,11 +23,10 @@ from groups import _find_group
 
 def _find_user(url: str, realm: str, username: str, token: str) -> dict | None:
     """Return the user representation by exact username, or None."""
-    resp = httpx.get(
+    resp = http.get(
         f"{url}/admin/realms/{realm}/users",
         params={"username": username, "exact": "true"},
         headers={"Authorization": f"Bearer {token}"},
-        timeout=10.0,
     )
     resp.raise_for_status()
     users = resp.json()
@@ -50,7 +50,7 @@ def _create_user(
     attributes: dict[str, list[str]],
 ) -> str:
     """Create a user and return their ID."""
-    resp = httpx.post(
+    resp = http.post(
         f"{url}/admin/realms/{realm}/users",
         headers={"Authorization": f"Bearer {token}"},
         json={
@@ -62,7 +62,6 @@ def _create_user(
             "emailVerified": email_verified,
             "attributes": attributes,
         },
-        timeout=10.0,
     )
     resp.raise_for_status()
     location = resp.headers.get("Location", "")
@@ -88,7 +87,7 @@ def _update_user(
     email_verified: bool,
     attributes: dict[str, list[str]],
 ) -> None:
-    resp = httpx.put(
+    resp = http.put(
         f"{url}/admin/realms/{realm}/users/{user_id}",
         headers={"Authorization": f"Bearer {token}"},
         json={
@@ -99,7 +98,6 @@ def _update_user(
             "emailVerified": email_verified,
             "attributes": attributes,
         },
-        timeout=10.0,
     )
     resp.raise_for_status()
 
@@ -126,10 +124,9 @@ def _sync_group_memberships(
         desired_ids[group["id"]] = name
 
     # Current memberships
-    resp = httpx.get(
+    resp = http.get(
         f"{url}/admin/realms/{realm}/users/{user_id}/groups",
         headers={"Authorization": f"Bearer {token}"},
-        timeout=10.0,
     )
     resp.raise_for_status()
     current_ids = {g["id"]: g["name"] for g in resp.json()}
@@ -138,18 +135,16 @@ def _sync_group_memberships(
     to_remove = set(current_ids) - set(desired_ids)
 
     for group_id in to_add:
-        httpx.put(
+        http.put(
             f"{url}/admin/realms/{realm}/users/{user_id}/groups/{group_id}",
             headers={"Authorization": f"Bearer {token}"},
-            timeout=10.0,
         ).raise_for_status()
         logger.info("Added user to group %r", desired_ids[group_id])
 
     for group_id in to_remove:
-        httpx.delete(
+        http.delete(
             f"{url}/admin/realms/{realm}/users/{user_id}/groups/{group_id}",
             headers={"Authorization": f"Bearer {token}"},
-            timeout=10.0,
         ).raise_for_status()
         logger.info("Removed user from group %r", current_ids[group_id])
 
@@ -163,10 +158,9 @@ def _sync_realm_roles(
     logger: kopf.Logger,
 ) -> None:
     """Reconcile realm-level role assignments for the user."""
-    all_roles_resp = httpx.get(
+    all_roles_resp = http.get(
         f"{url}/admin/realms/{realm}/roles",
         headers={"Authorization": f"Bearer {token}"},
-        timeout=10.0,
     )
     all_roles_resp.raise_for_status()
     role_map = {r["name"]: r for r in all_roles_resp.json()}
@@ -178,10 +172,9 @@ def _sync_realm_roles(
             "Create the roles first or remove them from realmRoles."
         )
 
-    current_resp = httpx.get(
+    current_resp = http.get(
         f"{url}/admin/realms/{realm}/users/{user_id}/role-mappings/realm",
         headers={"Authorization": f"Bearer {token}"},
-        timeout=10.0,
     )
     current_resp.raise_for_status()
     current_roles = {r["name"] for r in current_resp.json()}
@@ -191,21 +184,19 @@ def _sync_realm_roles(
     to_remove = [role_map[r] for r in current_roles - desired_set if r in role_map]
 
     if to_add:
-        httpx.post(
+        http.post(
             f"{url}/admin/realms/{realm}/users/{user_id}/role-mappings/realm",
             headers={"Authorization": f"Bearer {token}"},
             json=to_add,
-            timeout=10.0,
         ).raise_for_status()
         logger.info("Added realm roles %s to user", [r["name"] for r in to_add])
 
     if to_remove:
-        httpx.request(
+        http.request(
             "DELETE",
             f"{url}/admin/realms/{realm}/users/{user_id}/role-mappings/realm",
             headers={"Authorization": f"Bearer {token}"},
             json=to_remove,
-            timeout=10.0,
         ).raise_for_status()
         logger.info("Removed realm roles %s from user", [r["name"] for r in to_remove])
 
@@ -344,10 +335,9 @@ def delete_fn(spec: kopf.Spec, logger: kopf.Logger, **_: Any) -> None:
         if existing is None:
             logger.info("User %r already absent in realm %r", user_username, realm)
             return
-        httpx.delete(
+        http.delete(
             f"{keycloak_url}/admin/realms/{realm}/users/{existing['id']}",
             headers={"Authorization": f"Bearer {token}"},
-            timeout=10.0,
         ).raise_for_status()
         logger.info("Deleted user %r from realm %r", user_username, realm)
     except httpx.HTTPError as exc:
@@ -389,10 +379,9 @@ def check_drift(
         try:
             desired_groups: list[str] = list(spec.get("groups", []))
             if desired_groups:
-                current_resp = httpx.get(
+                current_resp = http.get(
                     f"{keycloak_url}/admin/realms/{realm}/users/{existing['id']}/groups",
                     headers={"Authorization": f"Bearer {token}"},
-                    timeout=10.0,
                 )
                 current_resp.raise_for_status()
                 current_group_names = {g["name"] for g in current_resp.json()}

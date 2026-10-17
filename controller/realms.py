@@ -6,7 +6,13 @@ from typing import Any
 
 import httpx
 import kopf
-from common import CRD_GROUP, CRD_VERSION, get_admin_token, resolve_connection_params
+from common import (
+    CRD_GROUP,
+    CRD_VERSION,
+    get_admin_token,
+    http,
+    resolve_connection_params,
+)
 
 # ---------------------------------------------------------------------------
 # Keycloak Admin API helpers
@@ -15,10 +21,9 @@ from common import CRD_GROUP, CRD_VERSION, get_admin_token, resolve_connection_p
 
 def _find_realm(url: str, realm: str, token: str) -> dict | None:
     """Return the realm representation or None if it does not exist."""
-    resp = httpx.get(
+    resp = http.get(
         f"{url}/admin/realms/{realm}",
         headers={"Authorization": f"Bearer {token}"},
-        timeout=10.0,
     )
     if resp.status_code == 404:
         return None
@@ -42,7 +47,7 @@ def _create_realm(
     brute_force_protected: bool,
     ssl_required: str,
 ) -> None:
-    resp = httpx.post(
+    resp = http.post(
         f"{url}/admin/realms",
         headers={"Authorization": f"Bearer {token}"},
         json={
@@ -59,7 +64,6 @@ def _create_realm(
             "bruteForceProtected": brute_force_protected,
             "sslRequired": ssl_required,
         },
-        timeout=10.0,
     )
     resp.raise_for_status()
 
@@ -80,7 +84,7 @@ def _update_realm(
     brute_force_protected: bool,
     ssl_required: str,
 ) -> None:
-    resp = httpx.put(
+    resp = http.put(
         f"{url}/admin/realms/{realm}",
         headers={"Authorization": f"Bearer {token}"},
         json={
@@ -95,7 +99,6 @@ def _update_realm(
             "bruteForceProtected": brute_force_protected,
             "sslRequired": ssl_required,
         },
-        timeout=10.0,
     )
     resp.raise_for_status()
 
@@ -212,10 +215,9 @@ def delete_fn(spec: kopf.Spec, logger: kopf.Logger, **_: Any) -> None:
         if existing is None:
             logger.info("Realm %s already absent", realm)
             return
-        httpx.delete(
+        http.delete(
             f"{keycloak_url}/admin/realms/{realm}",
             headers={"Authorization": f"Bearer {token}"},
-            timeout=10.0,
         ).raise_for_status()
         logger.info("Deleted Keycloak realm %s", realm)
     except httpx.HTTPError as exc:

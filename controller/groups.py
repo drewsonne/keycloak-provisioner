@@ -10,6 +10,7 @@ from common import (
     CRD_GROUP,
     CRD_VERSION,
     get_admin_token,
+    http,
     resolve_connection_params,
     set_realm_owner_reference,
 )
@@ -21,11 +22,10 @@ from common import (
 
 def _find_group(url: str, realm: str, name: str, token: str) -> dict | None:
     """Return the group object by exact name, or None."""
-    resp = httpx.get(
+    resp = http.get(
         f"{url}/admin/realms/{realm}/groups",
         params={"search": name, "exact": "true"},
         headers={"Authorization": f"Bearer {token}"},
-        timeout=10.0,
     )
     resp.raise_for_status()
     groups = resp.json()
@@ -38,10 +38,9 @@ def _find_group(url: str, realm: str, name: str, token: str) -> dict | None:
 
 def _get_group(url: str, realm: str, group_id: str, token: str) -> dict:
     """Return the full group representation by ID."""
-    resp = httpx.get(
+    resp = http.get(
         f"{url}/admin/realms/{realm}/groups/{group_id}",
         headers={"Authorization": f"Bearer {token}"},
-        timeout=10.0,
     )
     resp.raise_for_status()
     return resp.json()
@@ -55,11 +54,10 @@ def _create_group(
     token: str,
 ) -> str:
     """Create a group and return its ID."""
-    resp = httpx.post(
+    resp = http.post(
         f"{url}/admin/realms/{realm}/groups",
         headers={"Authorization": f"Bearer {token}"},
         json={"name": name, "attributes": attributes},
-        timeout=10.0,
     )
     resp.raise_for_status()
     # Keycloak returns 201 with Location header containing the new group ID
@@ -82,11 +80,10 @@ def _update_group(
     attributes: dict[str, list[str]],
     token: str,
 ) -> None:
-    resp = httpx.put(
+    resp = http.put(
         f"{url}/admin/realms/{realm}/groups/{group_id}",
         headers={"Authorization": f"Bearer {token}"},
         json={"name": name, "attributes": attributes},
-        timeout=10.0,
     )
     resp.raise_for_status()
 
@@ -101,10 +98,9 @@ def _set_role_mappings(
 ) -> None:
     """Reconcile realm-level role mappings for the group."""
     # Fetch all available realm roles
-    all_roles_resp = httpx.get(
+    all_roles_resp = http.get(
         f"{url}/admin/realms/{realm}/roles",
         headers={"Authorization": f"Bearer {token}"},
-        timeout=10.0,
     )
     all_roles_resp.raise_for_status()
     role_map = {r["name"]: r for r in all_roles_resp.json()}
@@ -118,10 +114,9 @@ def _set_role_mappings(
         )
 
     # Current mappings
-    current_resp = httpx.get(
+    current_resp = http.get(
         f"{url}/admin/realms/{realm}/groups/{group_id}/role-mappings/realm",
         headers={"Authorization": f"Bearer {token}"},
-        timeout=10.0,
     )
     current_resp.raise_for_status()
     current_roles = {r["name"] for r in current_resp.json()}
@@ -131,21 +126,19 @@ def _set_role_mappings(
     to_remove = [role_map[r] for r in current_roles - desired_set if r in role_map]
 
     if to_add:
-        httpx.post(
+        http.post(
             f"{url}/admin/realms/{realm}/groups/{group_id}/role-mappings/realm",
             headers={"Authorization": f"Bearer {token}"},
             json=to_add,
-            timeout=10.0,
         ).raise_for_status()
         logger.info("Added roles %s to group", [r["name"] for r in to_add])
 
     if to_remove:
-        httpx.request(
+        http.request(
             "DELETE",
             f"{url}/admin/realms/{realm}/groups/{group_id}/role-mappings/realm",
             headers={"Authorization": f"Bearer {token}"},
             json=to_remove,
-            timeout=10.0,
         ).raise_for_status()
         logger.info("Removed roles %s from group", [r["name"] for r in to_remove])
 
@@ -265,10 +258,9 @@ def delete_fn(spec: kopf.Spec, logger: kopf.Logger, **_: Any) -> None:
         if existing is None:
             logger.info("Group %r already absent in realm %r", name, realm)
             return
-        httpx.delete(
+        http.delete(
             f"{keycloak_url}/admin/realms/{realm}/groups/{existing['id']}",
             headers={"Authorization": f"Bearer {token}"},
-            timeout=10.0,
         ).raise_for_status()
         logger.info("Deleted group %r from realm %r", name, realm)
     except httpx.HTTPError as exc:
@@ -310,10 +302,9 @@ def check_drift(
         else:
             desired_roles = set(spec.get("realmRoles", []))
             if desired_roles:
-                roles_resp = httpx.get(
+                roles_resp = http.get(
                     f"{keycloak_url}/admin/realms/{realm}/groups/{existing['id']}/role-mappings/realm",
                     headers={"Authorization": f"Bearer {token}"},
-                    timeout=10.0,
                 )
                 roles_resp.raise_for_status()
                 current_roles = {r["name"] for r in roles_resp.json()}
