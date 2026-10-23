@@ -1,6 +1,6 @@
 image:
   repository: drewsonne/keycloak-provisioner
-  tag: latest
+  tag: ""  # empty means the chart appVersion (the release sets it to the image version)
 
 keycloak:
   url: http://keycloak-keycloakx-http.keycloak.svc.cluster.local
