@@ -13,6 +13,11 @@ import groups  # noqa: F401 — registers KeycloakRealmGroup handlers
 import kopf
 import realms  # noqa: F401 — registers KeycloakRealm handlers
 import users  # noqa: F401 — registers KeycloakUser handlers
+from logs import configure_logging
+
+# kopf's CLI has already added its own root handler before importing this
+# module; replacing it here turns kopf's own lines into JSON too.
+configure_logging()
 
 
 @kopf.on.startup()
